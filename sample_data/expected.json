@@ -1,0 +1,23 @@
+{
+  "status": "ok",
+  "farm_pixels": 100,
+  "date1": {
+    "valid_pixels": 87,
+    "coverage_pct": 87.0,
+    "mean_ndvi": 0.5
+  },
+  "date2": {
+    "valid_pixels": 90,
+    "coverage_pct": 90.0,
+    "mean_ndvi": 0.4703703703703704
+  },
+  "usable_pixels": 78,
+  "usable_pct": 78.0,
+  "mean_ndvi_common_date1": 0.5,
+  "mean_ndvi_common_date2": 0.4658119658119658,
+  "mean_change": -0.03418803418803419,
+  "threshold": 0.05,
+  "declined_pixels": 16,
+  "declined_pct": 20.51282051282051,
+  "decline_flag": false
+}
