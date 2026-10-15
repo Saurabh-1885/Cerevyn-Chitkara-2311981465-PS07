@@ -146,7 +146,7 @@ Deployment is planned, not done. See [docs/azure-plan.md](docs/azure-plan.md).
 
 ## Demo
 
-Demo video: (link to be added)
+Demo video: https://github.com/Saurabh-1885/Cerevyn-Chitkara-2311981465-PS07/blob/main/docs/demo.mp4
 
 ## Limitations
 
