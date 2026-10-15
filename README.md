@@ -1,97 +1,79 @@
 # PS07 Satellite Vegetation Change Monitor
 
-[![ci](https://github.com/Saurabh-1885/Cerevyn-Chitkara-2311981465-PS07/actions/workflows/ci.yml/badge.svg)](https://github.com/Saurabh-1885/Cerevyn-Chitkara-2311981465-PS07/actions/workflows/ci.yml)
+- Problem: PS07 (Cerevyn Round 1)
+- Name: Saurabh Gupta
+- Roll no: 2311981465
+- Course: BE CSE, Chitkara University, HP
 
-| | |
-|---|---|
-| Problem ID | PS07 |
-| Candidate | Saurabh Gupta |
-| Roll No | 2311981465 |
-| Branch | BE CSE |
-| University | Chitkara University, HP |
+This project takes one farm, two satellite images of it from different dates, and tells you whether the vegetation got worse. It works out NDVI for every pixel on both dates, compares them, and writes a JSON summary, a CSV and a heatmap.
 
-## Problem
+NDVI is (NIR - Red) / (NIR + Red). The tricky part is pixels you can't trust. If a pixel is marked cloudy or invalid, if NIR + Red is zero, or if a value isn't a real number, it gets NaN. I never fill those with 0, because 0 looks like bare soil and would quietly drag the average down.
 
-Compare a vegetation index (NDVI) for a farm area across two dates. NDVI must be computed correctly, invalid and cloud pixels must be excluded, and the comparison must be reproducible.
+For each date I report how much of the farm was clear (coverage) and the mean NDVI of that date's clear farm pixels. The actual comparison only uses farm pixels that are clear on both dates. Clouds can sit in different places on the two dates, and if I compared each date's own mean, part of the change would just come from comparing different pixels. Change is date 2 minus date 1. If no pixel is usable on both dates you get `status: "no_usable_pixels"` with null means and no flag, not a crash.
 
-## Approach
+A pixel counts as declined when its NDVI dropped by at least the threshold, and the farm gets `decline_flag: true` when the mean NDVI dropped by at least the threshold. The threshold is an absolute NDVI drop, 0.05 by default. You can change it with `--threshold` on the CLI, `threshold` on the API, or the `NDVI_DECLINE_THRESHOLD` environment variable (see `.env.example`). A value you pass directly beats the env variable, which beats the default.
 
-- NDVI = (NIR - Red) / (NIR + Red), computed per pixel in `ndvi.py`.
-- A pixel gets NaN, never 0, when it is flagged invalid (`valid` False), when `|NIR + Red| < 1e-12`, or when NIR or Red is not finite.
-- Per date, coverage is valid farm pixels / farm pixels, and the date mean uses that date's own valid farm pixels.
-- The comparison area is the farm pixels with a finite NDVI on both dates. Mean change (date 2 - date 1) and per-pixel change are computed only there, so different cloud masks on the two dates cannot bias the result.
-- A pixel declines when its change is <= -threshold. The date level flag `decline_flag` is set when the mean change is <= -threshold. The threshold is an absolute NDVI drop, default 0.05.
-- Configure the threshold with the `NDVI_DECLINE_THRESHOLD` environment variable (see `.env.example`), the `--threshold` CLI option, or the `threshold` query parameter on the API. Order of precedence: explicit value, then env var, then 0.05.
-- If no pixel is usable the result has `status: "no_usable_pixels"` and null means, change and flag. No exception is raised.
-- **An index decline does not by itself establish disease, cause or yield loss.** This text is included in every result as `note` and printed on the heatmap.
+An NDVI drop on its own doesn't show disease, its cause, or yield loss. It only says the index went down. Every result includes this as a `note`, and the heatmap says the same in its title.
 
-## Input schema
+Demo video: [docs/demo.mp4](https://github.com/Saurabh-1885/Cerevyn-Chitkara-2311981465-PS07/blob/main/docs/demo.mp4) (GitHub won't play it in the browser, so download it).
 
-Each file is a NumPy `.npz`. All arrays must be 2D with the same shape.
+CI runs the tests on every push: [.github/workflows/ci.yml](.github/workflows/ci.yml). The Azure deployment in [docs/azure-plan.md](docs/azure-plan.md) is a design only. Nothing is deployed.
 
-| File | Keys |
-|---|---|
-| date file (one per date) | `red` float, `nir` float, `valid` bool (True = clear pixel) |
-| farm file | `farm` bool (True = farm pixel) |
+## Setup
 
-A missing key, an unreadable file or a shape mismatch raises `ValueError` with a message (CLI exits with `error: ...`, API returns 422).
-
-## Setup (Windows)
+You need Python 3.11 or newer. CI uses 3.11 and I worked on 3.14.3. On Windows:
 
 ```
+git clone https://github.com/Saurabh-1885/Cerevyn-Chitkara-2311981465-PS07.git
+cd Cerevyn-Chitkara-2311981465-PS07
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-Python 3.11 or newer. CI runs 3.11; local development used 3.14.3.
-
-Dependency versions (from `requirements.txt`):
-
-| Package | Version |
-|---|---|
-| numpy | 2.4.6 |
-| matplotlib | 3.11.2 |
-| fastapi | 0.143.1 |
-| uvicorn | 0.54.0 |
-| python-multipart | 0.0.32 |
-| httpx | 0.28.1 |
-| pytest | 9.1.1 |
+`requirements.txt` pins numpy 2.4.6, matplotlib 3.11.2, fastapi 0.143.1, uvicorn 0.54.0, python-multipart 0.0.32, httpx 0.28.1 and pytest 9.1.1.
 
 ## Run
 
-CLI on the bundled sample data (writes `outputs/results.json`, `outputs/results.csv`, `outputs/heatmap.png`):
+With no arguments the CLI runs on the sample data and writes `outputs/results.json`, `outputs/results.csv` and `outputs/heatmap.png`:
 
 ```
 .venv\Scripts\python report.py
-.venv\Scripts\python report.py --date1 a.npz --date2 b.npz --farm farm.npz --threshold 0.1 --out outputs
+.venv\Scripts\python report.py --threshold 0.03
 ```
 
-API:
+Use `--date1`, `--date2` and `--farm` to point it at your own files and `--out` for a different output folder. Each run overwrites the files in that folder.
+
+Inputs are NumPy `.npz` files and all arrays must be 2D with the same shape. A date file has `red` and `nir` (floats) and `valid` (bool, True = clear pixel). The farm file has `farm` (bool, True = inside the farm). A missing key, a file that isn't an `.npz`, or shapes that don't match give a clear error: the CLI prints `error: ...` and the API answers 422.
+
+To start the API:
 
 ```
 .venv\Scripts\python -m uvicorn app:app
 ```
 
-- `POST /compare` with optional multipart files `date1`, `date2`, `farm` (the bundled sample is used for any file not sent) and optional `threshold` query parameter. Returns the result JSON and writes the output files.
-- `GET /results.json`, `GET /results.csv`, `GET /heatmap.png` download the outputs of the last run.
-- Interactive docs at `http://127.0.0.1:8000/docs`.
+Then open http://127.0.0.1:8000/docs. If port 8000 is already in use, add `--port 8765` and use that port instead. `POST /compare` takes optional `date1`, `date2` and `farm` uploads (any you skip fall back to the sample file) and an optional `threshold`. It returns the result and writes the outputs, which you can then download from `GET /results.json`, `/results.csv` and `/heatmap.png`.
 
-Tests:
+## Tests
 
 ```
 .venv\Scripts\python -m pytest
 ```
 
-## Sample data and output
+There are 17 tests in `tests/`. The checks the brief asks for are covered by:
 
-`sample_data/` holds synthetic 12x12 grids built by `make_sample.py` (no randomness). Healthy pixels have NIR 0.6 and Red 0.2 (NDVI 0.5). The farm is every pixel except the 1-pixel border (100 pixels).
+- NIR 0.6 and Red 0.2 gives NDVI 0.5: `test_known_value`
+- zero denominators get NaN and are left out: `test_zero_denominator_is_nan_and_excluded`
+- a fully masked area: `test_entirely_masked_area_has_no_usable_pixels`, plus `test_sample_all_cloud_has_no_usable_pixels` and `test_all_cloud_date2_has_no_usable_pixels` on the sample files
+- different cloud masks on the two dates: `test_different_cloud_masks_use_intersection`
 
-- Date 1: cloud on the top 2 rows and three farm pixels with Red = NIR = 0 (zero denominator).
-- Date 2: cloud on the right 2 columns and a 4x4 patch where NIR drops to 0.4 (NDVI 0.333).
-- `sample_data/expected.json` holds the hand derived expected values; `sample_data/README.md` shows the derivation.
+The rest check that invalid pixels are NaN and not 0, that the threshold changes the flag, that bad shapes, missing keys, junk files and negative thresholds are rejected, that the sample run matches `sample_data/expected.json`, and that the API serves the output files.
 
-Output of `python report.py` (`outputs/results.json`):
+## Sample output
+
+Everything in `sample_data/` is synthetic and made by `make_sample.py`, with no randomness, so it comes out the same every time. The grids are 12x12 and the farm is everything except the 1-pixel border, so 100 pixels. A healthy pixel has NIR 0.6 and Red 0.2, which is NDVI 0.5. On date 1 the top 2 rows are cloudy and three farm pixels have Red and NIR both 0. On date 2 the right 2 columns are cloudy and a 4x4 patch drops to NIR 0.4 (NDVI 0.333). `date2_all_cloud.npz` is date 2 with every pixel cloudy, for the no-usable-pixels case. `sample_data/README.md` works out the expected numbers by hand.
+
+`python report.py` writes this to `outputs/results.json`:
 
 ```json
 {
@@ -120,43 +102,18 @@ Output of `python report.py` (`outputs/results.json`):
 }
 ```
 
-The 16 patch pixels each drop by 1/6, so 20.5% of usable pixels decline by at least the threshold, but the mean change (-0.034) is smaller than 0.05, so the date level flag is false. Lower the threshold (for example `--threshold 0.03`) to see it set.
+78 farm pixels are clear on both dates. The 16 patch pixels each drop by 1/6, so 20.5% of the usable pixels declined. Spread over all 78 pixels, though, the mean change is only -0.034, which isn't a 0.05 drop, so the farm isn't flagged. With `--threshold 0.03` it is.
 
-Heatmap (NDVI date 1, NDVI date 2, change; gray = cloud, invalid or outside the farm):
+The heatmap shows NDVI on date 1, NDVI on date 2 and the change. Gray is cloud, invalid or outside the farm.
 
 ![heatmap](outputs/heatmap.png)
 
-## Required checks and tests
-
-| Required check | Test |
-|---|---|
-| NIR 0.6, Red 0.2 gives NDVI 0.5 | `test_known_value` |
-| Zero denominators are never given a value | `test_zero_denominator_is_nan_and_excluded` |
-| Invalid pixels are NaN, not 0 | `test_invalid_pixel_is_nan_not_zero` |
-| Entirely masked area | `test_entirely_masked_area_has_no_usable_pixels`, `test_sample_all_cloud_has_no_usable_pixels`, `test_all_cloud_date2_has_no_usable_pixels` |
-| Different cloud masks between dates | `test_different_cloud_masks_use_intersection` |
-| Threshold is configurable | `test_decline_flag_respects_threshold`, `test_threshold_query_changes_flag` |
-| Shape mismatch, missing key, bad file | `test_shape_mismatch_raises`, `test_mismatched_shapes_is_422`, `test_missing_key_and_garbage_are_422` |
-| Sample data matches expected outputs | `test_sample_data_matches_expected`, `test_default_compare_matches_expected` |
-| API outputs and negative threshold | `test_heatmap_and_csv_served_after_run`, `test_negative_threshold_is_422`, `test_get_before_any_run_is_404` |
-
-## Azure
-
-Deployment is planned, not done. See [docs/azure-plan.md](docs/azure-plan.md).
-
-## Demo
-
-Demo video: https://github.com/Saurabh-1885/Cerevyn-Chitkara-2311981465-PS07/blob/main/docs/demo.mp4
-
 ## Limitations
 
-- Synthetic data only; no real satellite imagery was used or tested.
-- NDVI only; no other indices.
-- No georeferencing or reprojection. Inputs must already be aligned grids of the same shape.
-- Every pixel has equal weight; pixel area and partial pixels are ignored.
-- Single user, local `outputs/` folder. Each run overwrites the previous outputs.
-- Cloud masks are supplied in the `valid` array; clouds are not detected.
+I've only tested it on synthetic data, not real satellite images. It only does NDVI. There's no georeferencing or reprojection, so both dates and the farm mask have to be the same grid already. Cloud masks have to come with the data in `valid`; the tool doesn't detect clouds. Every pixel counts the same regardless of its area. Outputs only go to a local folder with no history, so it's meant for one user at a time.
 
-## Contributions
+## How I used AI tools
 
-AI tools were used for scaffolding; I reviewed and can explain all code.
+AI tools drafted the first versions of most files: the code in `ndvi.py`, `report.py` and `app.py`, the sample data script `make_sample.py`, the tests, the CI workflow, the Azure plan and the text of this README.
+
+I picked PS07 and decided the rules the code has to follow: invalid, cloudy and zero-denominator pixels get NaN and never 0, the comparison only uses farm pixels valid on both dates, the default threshold is 0.05 as an absolute NDVI drop, and the export is a JSON summary, a CSV and a heatmap. I ran the tests, the CLI and the API myself, read through the code, and I can explain any part of it or change it when asked. The sample numbers can be checked by hand from the layout described in `sample_data/README.md`.
