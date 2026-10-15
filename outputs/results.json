@@ -1,0 +1,24 @@
+{
+  "status": "ok",
+  "farm_pixels": 100,
+  "date1": {
+    "valid_pixels": 87,
+    "coverage_pct": 87.0,
+    "mean_ndvi": 0.49999999999999994
+  },
+  "date2": {
+    "valid_pixels": 90,
+    "coverage_pct": 90.0,
+    "mean_ndvi": 0.4703703703703703
+  },
+  "usable_pixels": 78,
+  "usable_pct": 78.0,
+  "mean_ndvi_common_date1": 0.4999999999999999,
+  "mean_ndvi_common_date2": 0.46581196581196577,
+  "mean_change": -0.03418803418803418,
+  "threshold": 0.05,
+  "declined_pixels": 16,
+  "declined_pct": 20.51282051282051,
+  "decline_flag": false,
+  "note": "An index decline does not by itself establish disease, cause or yield loss."
+}
